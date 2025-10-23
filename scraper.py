@@ -1,5 +1,6 @@
 import re
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urljoin
+from bs4 import BeautifulSoup 
 
 def scraper(url, resp):
     links = extract_next_links(url, resp)
@@ -15,7 +16,24 @@ def extract_next_links(url, resp):
     #         resp.raw_response.url: the url, again
     #         resp.raw_response.content: the content of the page!
     # Return a list with the hyperlinks (as strings) scrapped from resp.raw_response.content
-    return list()
+    extracted_links = set()
+    if resp.status != 200 or resp.raw_response is None or resp.raw_response.content is None:
+        return []
+    
+    soup = BeautifulSoup(resp.raw_response.content, "html.parser") # Consider swtiching to a more efficient HTML parser
+
+    # Find all <a> tags with a hypertext reference (href) attribute
+    for link in soup.find_all("a", href=True): 
+        href = link.get("href")
+        href = href.strip() # Remove any whitespaces the URL may have
+        absolute_url = urljoin(url, href) # Convert relative URLs to absolute URLs
+        extracted_links.add(defragment_url(absolute_url)) # Defragment link and add to set of extracted links
+
+    return list(extracted_links)
+
+def defragment_url(url: str):
+    """"Remove fragment from URL"""
+    return urlparse(url)._replace(fragment="").geturl()
 
 def is_valid(url):
     # Decide whether to crawl this url or not. 
