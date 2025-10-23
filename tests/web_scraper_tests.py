@@ -109,6 +109,7 @@ class TestTokenizer(unittest.TestCase):
         """
         soup = BeautifulSoup(html, "html.parser")
         token_lst = tokenizer.tokenize(soup)
+        # Since all tokens are stop words, the dictionary should be empty
         freqs = tokenizer.compute_word_frequencies(token_lst)
         self.assertEqual(freqs, {})
 
