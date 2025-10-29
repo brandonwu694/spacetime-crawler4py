@@ -35,24 +35,27 @@ def defragment_url(url: str):
     """"Remove fragment from URL"""
     return urlparse(url)._replace(fragment="").geturl()
 
-def is_valid(url):
-    # Decide whether to crawl this url or not. 
-    # If you decide to crawl it, return True; otherwise return False.
-    # There are already some conditions that return False.
+# Use re.compile to convert file attachment into a regex object
+# The regex object has useful methods such as search(), findall()
+FILETYPE_PATTERN = re.compile(
+    r"\.(css|js|bmp|gif|jpe?g|ico|png|tiff?|mid|mp2|mp3|mp4|"
+    r"wav|avi|mov|mpeg|ram|m4v|mkv|ogg|ogv|pdf|ps|eps|tex|ppt|pptx|"
+    r"doc|docx|xls|xlsx|names|data|dat|exe|bz2|tar|msi|bin|7z|psd|"
+    r"dmg|iso|epub|dll|cnf|tgz|sha1|thmx|mso|arff|rtf|jar|csv|"
+    r"rm|smil|wmv|swf|wma|zip|rar|gz)$"
+)
+
+def is_valid(url: str, pattern=FILETYPE_PATTERN) -> bool:
+    """Ensures that crawled URLs are HTTP or HTTPs protocol and within the specified domain"""
     try:
         parsed = urlparse(url)
-        if parsed.scheme not in set(["http", "https"]):
+        if parsed.scheme.lower() not in {"https", "http"}:
             return False
-        return not re.match(
-            r".*\.(css|js|bmp|gif|jpe?g|ico"
-            + r"|png|tiff?|mid|mp2|mp3|mp4"
-            + r"|wav|avi|mov|mpeg|ram|m4v|mkv|ogg|ogv|pdf"
-            + r"|ps|eps|tex|ppt|pptx|doc|docx|xls|xlsx|names"
-            + r"|data|dat|exe|bz2|tar|msi|bin|7z|psd|dmg|iso"
-            + r"|epub|dll|cnf|tgz|sha1"
-            + r"|thmx|mso|arff|rtf|jar|csv"
-            + r"|rm|smil|wmv|swf|wma|zip|rar|gz)$", parsed.path.lower())
-
+        if pattern.search(parsed.path.lower()):
+            return False
+        if not re.search(r"(ics\.uci\.edu|cs\.uci\.edu|informatics\.uci\.edu|stat\.uci\.edu)$", parsed.netloc.lower()):
+            return False
+        return True
     except TypeError:
         print ("TypeError for ", parsed)
         raise

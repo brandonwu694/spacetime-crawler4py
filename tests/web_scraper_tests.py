@@ -93,7 +93,11 @@ class TestTokenizer(unittest.TestCase):
             self.assertTrue(token.isalnum())
 
         freqs = tokenizer.compute_word_frequencies(token_lst)
-        tokenizer.print_frequencies(freqs)
+        for token in freqs:
+            if token == "site":
+                self.assertEqual(freqs[token], 2)
+            else:
+                self.assertEqual(freqs[token], 1)
 
     def test_omit_stopwords(self):
         html = """
@@ -112,6 +116,113 @@ class TestTokenizer(unittest.TestCase):
         # Since all tokens are stop words, the dictionary should be empty
         freqs = tokenizer.compute_word_frequencies(token_lst)
         self.assertEqual(freqs, {})
+
+class TestLinkValidation(unittest.TestCase):
+    def test_http_and_https(self):
+        # Ensure that only URLs using the http or https protocol are deemed as valid URL links
+        valid_schemes = ["http://ics.uci.edu", "https://www.informatics.uci.edu/research"]
+        for url in valid_schemes:
+            self.assertEqual(scraper.is_valid(url), True)
+
+    def test_invalid_protocols(self):
+        invalid_schemes = ["ftp://ics.uci.edu/data", 
+                           "sftp://ics.uci.edu/files", 
+                           "ftps://cs.uci.edu/public", 
+                           "file:///Users/brandon/Documents/index.html",
+                           "file://localhost/etc/hosts" "file://C:/Users/brandon/Desktop/test.html"]
+        for url in invalid_schemes:
+            self.assertEqual(scraper.is_valid(url), False)
+
+    def test_scrape_valid_domain(self):
+        valid_ics_domains = ["https://www.ics.uci.edu/", 
+                             "http://ics.uci.edu/about/", 
+                             "https://faculty.ics.uci.edu/people", 
+                             "https://www.ics.uci.edu/~fielding/pubs/dissertation/top.htm", 
+                             "https://archive.ics.uci.edu/ml/index.php", 
+                             "https://calendar.ics.uci.edu/events"]
+        for url in valid_ics_domains:
+            self.assertEqual(scraper.is_valid(url), True)
+
+        valid_cs_domains = ["https://www.cs.uci.edu/", 
+                            "http://cs.uci.edu/research/", 
+                            "https://faculty.cs.uci.edu/projects/", 
+                            "https://cs.uci.edu/grad/programs",
+                            "https://www.cs.uci.edu/people/faculty"]
+        for url in valid_cs_domains:
+            self.assertEqual(scraper.is_valid(url), True)
+
+        valid_informatics_domains = ["https://www.informatics.uci.edu/", 
+                                     "http://informatics.uci.edu/about/", 
+                                     "https://www.informatics.uci.edu/research/",
+                                     "https://informatics.uci.edu/graduate-programs/", 
+                                     "https://faculty.informatics.uci.edu/labs/"]
+        for url in valid_informatics_domains:
+            self.assertEqual(scraper.is_valid(url), True)
+
+        valid_stats_domains = ["https://www.stat.uci.edu/", 
+                               "http://stat.uci.edu/research", 
+                               "https://www.stat.uci.edu/faculty", 
+                               "https://faculty.stat.uci.edu/data-lab"]
+        for url in valid_stats_domains:
+            self.assertEqual(scraper.is_valid(url), True)
+
+    def test_invalid_look_alikes(self):
+        # URLs that seem like they may have a valid domain, but should be classified as an invalid URL to crawl
+        look_alike_urls = ["https://uci.edu", 
+                           "https://engineering.uci.edu", 
+                           "https://ics.uci.edu.evil.com", 
+                           "https://example.com/ics.uci.edu"]
+        for url in look_alike_urls:
+            self.assertEqual(scraper.is_valid(url), False)
+
+    def test_invalid_file_attachments(self):
+        documents_and_data_files = ["https://www.ics.uci.edu/files/syllabus.pdf", 
+                                    "https://cs.uci.edu/data/export.csv", 
+                                    "https://informatics.uci.edu/reports/summary.docx",
+                                    "https://stat.uci.edu/files/grades.xlsx", 
+                                    "https://faculty.cs.uci.edu/docs/final_paper.tex", 
+                                    "https://www.stat.uci.edu/resources/template.rtf"]
+        for url in documents_and_data_files:
+            self.assertEqual(scraper.is_valid(url), False)
+
+        archives_and_compressed_files = ["https://www.ics.uci.edu/downloads/project.tar",
+                                         "https://informatics.uci.edu/data/archive.zip",
+                                         "https://cs.uci.edu/backup/site.rar",
+                                         "https://stat.uci.edu/datasets/sample.gz",
+                                         "https://www.ics.uci.edu/files/compressed/backup.7z",
+                                         "https://faculty.informatics.uci.edu/build/package.tgz"]
+        for url in archives_and_compressed_files:
+            self.assertEqual(scraper.is_valid(url), False)
+
+        images_and_media = ["https://www.ics.uci.edu/images/logo.png",
+                            "https://faculty.cs.uci.edu/images/banner.jpg",
+                            "https://informatics.uci.edu/media/background.jpeg",
+                            "https://www.stat.uci.edu/media/intro.mp4",
+                            "https://cs.uci.edu/audio/lecture.mp3",
+                            "https://ics.uci.edu/videos/promo.mov"]
+        for url in images_and_media:
+            self.assertEqual(scraper.is_valid(url), False)
+
+        misc = ["https://cs.uci.edu/models/neuralnet.arff",
+                "https://informatics.uci.edu/datasets/beta.epub",
+                "https://ics.uci.edu/logs/output.dat",
+                "https://www.stat.uci.edu/olddata/archive.bz2",
+                "https://informatics.uci.edu/figures/diagram.ps",
+                "https://ics.uci.edu/code/source.jar",
+                "https://stat.uci.edu/research/presentation.pptx",
+                "https://ics.uci.edu/documents/report.thmx"]
+        for url in misc:
+            self.assertEqual(scraper.is_valid(url), False)
+
+    def test_edge_cases(self):
+        # URLs that contain file attachments in the path name, but are not actual files, should be considered as valid URLs
+        edge_cases = ["https://www.ics.uci.edu/docs/pdf-guide.html",
+                     "https://cs.uci.edu/research/csv_analysis_page",
+                     "https://informatics.uci.edu/data/excel.xlsx-overview",
+                     "https://stat.uci.edu/datasets/archive.tar-info",
+                     "https://faculty.ics.uci.edu/downloads/zip_helper_tool"]
+        for url in edge_cases:
+            self.assertEqual(scraper.is_valid(url), True)
 
 if __name__ == "__main__":
     unittest.main()
