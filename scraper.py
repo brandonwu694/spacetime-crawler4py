@@ -3,7 +3,13 @@ from urllib.parse import urlparse, urljoin
 from bs4 import BeautifulSoup 
 from collections import Counter, defaultdict
 from bs4.element import Comment
+import hashlib
 
+seen_hashes = set()       # For exact duplicate detection
+seen_simhashes = set()    # For near-duplicate detection
+
+page_hashes = set()
+page_shingles = []
 seen_urls = set()
 longest_page = ("", 0)
 word_counter = Counter()
@@ -36,7 +42,8 @@ STOPWORDS = frozenset({
 
 def scraper(url, resp):
     links = extract_next_links(url, resp)
-    return [link for link in links if is_valid(link)]
+    normalized_links = [normalize_url(link) for link in links]
+    return [link for link in normalized_links if is_valid(link)]
 
 def extract_next_links(url, resp):
     # Implementation required.
@@ -48,13 +55,44 @@ def extract_next_links(url, resp):
     #         resp.raw_response.url: the url, again
     #         resp.raw_response.content: the content of the page!
     # Return a list with the hyperlinks (as strings) scrapped from resp.raw_response.content
+    # Early return if response is invalid
+    if resp.status != 200 or resp.raw_response is None or resp.raw_response.content is None:
+        return []
+    # --- Add HTML content check here ---
+    content_type = resp.raw_response.headers.get("Content-Type", "").lower()
+    if "html" not in content_type:
+        return []
+
     extracted_links = set()
     if resp.status != 200 or resp.raw_response is None or resp.raw_response.content is None:
         return []
-    
-    soup = BeautifulSoup(resp.raw_response.content, "lxml") # Consider swtiching to a more efficient HTML parser
 
-    # Track unique page and longest page by word count 
+    try:
+        soup = BeautifulSoup(resp.raw_response.content, "lxml")
+    except Exception as e:
+        print(f"Error parsing HTML at {url}: {e}")
+        return []
+    # --- Exact and near-duplicate detection ---
+    text_content = soup.get_text(separator=' ', strip=True)
+    page_hash = compute_page_hash(text_content)
+
+    # Check for exact duplicates
+    if page_hash in seen_hashes:
+        print(f"Skipping exact duplicate: {url}")
+        return []
+    seen_hashes.add(page_hash)
+
+    # Compute near-duplicate similarity (SimHash)
+    words = _extract_words(soup)
+    simhash = compute_simhash(words)
+
+    for old_hash in seen_simhashes:
+        if hamming_distance(simhash, old_hash) < 5:  # threshold can be tuned
+            print(f"Skipping near-duplicate: {url}")
+            return []
+    seen_simhashes.add(simhash)
+
+    # Track unique page and longest page by word count
     canonical = normalize_url(resp.url or url)
 
     # See the first time we see a page
@@ -124,6 +162,41 @@ FILETYPE_PATTERN = re.compile(
 )
 
 VALID_SCHEMES = frozenset({"https", "http"})
+
+def compute_shingles(words, k=5):
+    """Return a set of k-word shingles for the given list of words."""
+    return {" ".join(words[i:i+k]) for i in range(len(words) - k + 1)}
+
+def jaccard_similarity(set1, set2):
+    """Compute Jaccard similarity between two sets."""
+    if not set1 or not set2:
+        return 0
+    return len(set1 & set2) / len(set1 | set2)
+
+def compute_page_hash(content):
+    """Compute a SHA256 hash of the page text for exact duplicate detection."""
+    return hashlib.sha256(content.encode("utf-8")).hexdigest()
+
+def compute_simhash(words):
+    """Compute a simple simhash value for near-duplicate detection."""
+    from collections import Counter
+    hash_bits = [0] * 64
+    for word, freq in Counter(words).items():
+        h = int(hashlib.md5(word.encode("utf-8")).hexdigest(), 16)
+        for i in range(64):
+            bit = (h >> i) & 1
+            hash_bits[i] += freq if bit else -freq
+    fingerprint = 0
+    for i, bit_sum in enumerate(hash_bits):
+        if bit_sum > 0:
+            fingerprint |= 1 << i
+    return fingerprint
+
+def hamming_distance(x, y):
+    """Compute the Hamming distance between two simhash values."""
+    return bin(x ^ y).count("1")
+
+
 
 def is_valid(url: str, _pattern=FILETYPE_PATTERN, _valid_schemes=VALID_SCHEMES) -> bool:
     """Ensures that crawled URLs are HTTP or HTTPs protocol and within the specified domain"""
