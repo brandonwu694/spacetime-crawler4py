@@ -1,12 +1,12 @@
 import re
 from urllib.parse import urlparse, urljoin
-from bs4 import BeautifulSoup 
+from bs4 import BeautifulSoup
 from collections import Counter, defaultdict
 from bs4.element import Comment
 import hashlib
 
-seen_hashes = set()       # For exact duplicate detection
-seen_simhashes = set()    # For near-duplicate detection
+seen_hashes = set()  # For exact duplicate detection
+seen_simhashes = set()  # For near-duplicate detection
 
 page_hashes = set()
 page_shingles = []
@@ -40,10 +40,12 @@ STOPWORDS = frozenset({
     "weren't", 'won', "won't", 'wouldn', "wouldn't"
 })
 
+
 def scraper(url, resp):
     links = extract_next_links(url, resp)
     normalized_links = [normalize_url(link) for link in links]
     return [link for link in normalized_links if is_valid(link)]
+
 
 def extract_next_links(url, resp):
     # Implementation required.
@@ -115,36 +117,41 @@ def extract_next_links(url, resp):
             subdomain_counts[host] += 1
 
     # Find all <a> tags with a hypertext reference (href) attribute
-    for link in soup.find_all("a", href=True): 
+    for link in soup.find_all("a", href=True):
         href = link.get("href")
-        href = href.strip() # Remove any whitespaces the URL may have
-        absolute_url = urljoin(url, href) # Convert relative URLs to absolute URLs
-        extracted_links.add(normalize_url(absolute_url)) # Defragment link and add to set of extracted links
+        href = href.strip()  # Remove any whitespaces the URL may have
+        absolute_url = urljoin(url, href)  # Convert relative URLs to absolute URLs
+        extracted_links.add(normalize_url(absolute_url))  # Defragment link and add to set of extracted links
 
     return list(extracted_links)
+
 
 def normalize_url(url: str):
     """"Remove fragment and port number from URL"""
     parsed = urlparse(url)
     return parsed._replace(netloc=parsed.netloc.split(":", 1)[0].rstrip("."), fragment="").geturl()
 
+
 DISALLOWED_TAGS = frozenset({"style", "script", "head", "title", "meta", "[document]"})
+
 
 def _tag_visible(el, _disallowed=DISALLOWED_TAGS):
     """Use tag name to identify if text is visible to user"""
     # Retrieve current HTML tag from the current text node
     parent = getattr(el, "parent", None)
-    if not parent: # Safeguard against malformed URLs 
+    if not parent:  # Safeguard against malformed URLs
         return False
-    if parent.name in _disallowed: # Omit tags not visible to user
+    if parent.name in _disallowed:  # Omit tags not visible to user
         return False
-    if isinstance(el, Comment): # Filter out comments that cannot be seen by the user
+    if isinstance(el, Comment):  # Filter out comments that cannot be seen by the user
         return False
     s = str(el).strip()
     return bool(s)
 
+
 # Regex patterm that matches sequences of one or more alphabetic character(s), ensuring there is a word boundary
 _word_re = re.compile(r"\b[a-zA-Z]+\b")
+
 
 def _extract_words(soup):
     """Extract words visible words to user on given URL page"""
@@ -152,6 +159,7 @@ def _extract_words(soup):
     vis = [t.strip() for t in texts if _tag_visible(t)]
     text = " ".join(vis)
     return _word_re.findall(text.lower())
+
 
 FILETYPE_PATTERN = re.compile(
     r"\.(css|js|bmp|gif|jpe?g|ico|png|tiff?|mid|mp2|mp3|mp4|"
@@ -163,9 +171,11 @@ FILETYPE_PATTERN = re.compile(
 
 VALID_SCHEMES = frozenset({"https", "http"})
 
+
 def compute_shingles(words, k=5):
     """Return a set of k-word shingles for the given list of words."""
-    return {" ".join(words[i:i+k]) for i in range(len(words) - k + 1)}
+    return {" ".join(words[i:i + k]) for i in range(len(words) - k + 1)}
+
 
 def jaccard_similarity(set1, set2):
     """Compute Jaccard similarity between two sets."""
@@ -173,9 +183,11 @@ def jaccard_similarity(set1, set2):
         return 0
     return len(set1 & set2) / len(set1 | set2)
 
+
 def compute_page_hash(content):
     """Compute a SHA256 hash of the page text for exact duplicate detection."""
     return hashlib.sha256(content.encode("utf-8")).hexdigest()
+
 
 def compute_simhash(words):
     """Compute a simple simhash value for near-duplicate detection."""
@@ -192,10 +204,10 @@ def compute_simhash(words):
             fingerprint |= 1 << i
     return fingerprint
 
+
 def hamming_distance(x, y):
     """Compute the Hamming distance between two simhash values."""
     return bin(x ^ y).count("1")
-
 
 
 def is_valid(url: str, _pattern=FILETYPE_PATTERN, _valid_schemes=VALID_SCHEMES) -> bool:
@@ -211,5 +223,5 @@ def is_valid(url: str, _pattern=FILETYPE_PATTERN, _valid_schemes=VALID_SCHEMES) 
             return False
         return True
     except TypeError:
-        print ("TypeError for ", parsed)
+        print("TypeError for ", parsed)
         raise
