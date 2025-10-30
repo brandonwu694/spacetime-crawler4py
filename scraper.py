@@ -1,6 +1,11 @@
 import re
 from urllib.parse import urlparse, urljoin
 from bs4 import BeautifulSoup 
+from collections import Counter, defaultdict
+from bs4.element import Comment
+
+seen_urls = set()
+longest_page = ("", 0)
 
 def scraper(url, resp):
     links = extract_next_links(url, resp)
@@ -21,6 +26,15 @@ def extract_next_links(url, resp):
         return []
     
     soup = BeautifulSoup(resp.raw_response.content, "html.parser") # Consider swtiching to a more efficient HTML parser
+    
+    # Track unique page and longest page by word count 
+    canonical = defragment_url(resp.url or url)
+    seen_urls.add(canonical)
+    words = _extract_words(soup)
+    count = len(words)
+    global longest_page
+    if count > longest_page[1]:
+        longest_page = (canonical, count)
 
     # Find all <a> tags with a hypertext reference (href) attribute
     for link in soup.find_all("a", href=True): 
@@ -44,6 +58,25 @@ FILETYPE_PATTERN = re.compile(
     r"dmg|iso|epub|dll|cnf|tgz|sha1|thmx|mso|arff|rtf|jar|csv|"
     r"rm|smil|wmv|swf|wma|zip|rar|gz)$"
 )
+
+def _tag_visible(el):
+    parent = getattr(el, "parent", None)
+    if not parent:
+        return False
+    if parent.name in ["style", "script", "head", "title", "meta", "[document]"]:
+        return False
+    if isinstance(el, Comment):
+        return False
+    s = str(el).strip()
+    return bool(s)
+
+_word_re = re.compile(r"\b[a-zA-Z]+\b")
+
+def _extract_words(soup):
+    texts = soup.find_all(string=True)
+    vis = [t.strip() for t in texts if _tag_visible(t)]
+    text = " ".join(vis)
+    return _word_re.findall(text.lower())
 
 def is_valid(url: str, pattern=FILETYPE_PATTERN) -> bool:
     """Ensures that crawled URLs are HTTP or HTTPs protocol and within the specified domain"""
