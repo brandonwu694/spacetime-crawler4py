@@ -10,45 +10,45 @@ import scraper
 import tokenizer
 
 # NOTE: URLs used are solely for test purposes, I'm not sure if it's a good idea to visit them
-class TestDefragmentURL(unittest.TestCase):
+class TestNormalizeURL(unittest.TestCase):
     def test_defragment_url(self):
         # Test most common use case of defragment_url
         raw_url = "https://en.wikipedia.org/wiki/Python_(programming_language)#History"
         defragmented_url = "https://en.wikipedia.org/wiki/Python_(programming_language)"
-        self.assertEqual(scraper.defragment_url(raw_url), defragmented_url)
+        self.assertEqual(scraper.normalize_url(raw_url), defragmented_url)
 
         # Trailing '/' after domain name
         raw_url = "https://example.com/#frag"
         defragmented_url = "https://example.com/"
-        self.assertEqual(scraper.defragment_url(raw_url), defragmented_url)
+        self.assertEqual(scraper.normalize_url(raw_url), defragmented_url)
 
         # URL containing unicode characters
         raw_url = "https://exämple.org/über#Käse"
         defragmented_url = "https://exämple.org/über"
-        self.assertEqual(scraper.defragment_url(raw_url), defragmented_url)
+        self.assertEqual(scraper.normalize_url(raw_url), defragmented_url)
 
     def test_different_schemes(self):
         raw_url = "file:///Users/u/readme.txt#L10"
         defragmented_url = "file:///Users/u/readme.txt"
-        self.assertEqual(scraper.defragment_url(raw_url), defragmented_url)
+        self.assertEqual(scraper.normalize_url(raw_url), defragmented_url)
 
         raw_url = "data:text/plain;base64,SGk=#frag"
         defragmented_url = "data:text/plain;base64,SGk="
-        self.assertEqual(scraper.defragment_url(raw_url), defragmented_url)
+        self.assertEqual(scraper.normalize_url(raw_url), defragmented_url)
 
         raw_url = "mailto:alice@example.com#sig"
         defragmented_url = "mailto:alice@example.com"
-        self.assertEqual(scraper.defragment_url(raw_url), defragmented_url)
+        self.assertEqual(scraper.normalize_url(raw_url), defragmented_url)
 
         raw_url = "ftp://host/file#part"
         defragmented_url = "ftp://host/file"
-        self.assertEqual(scraper.defragment_url(raw_url), defragmented_url)
+        self.assertEqual(scraper.normalize_url(raw_url), defragmented_url)
 
     def test_no_fragment_link(self):
         # Verify that defragment_link() keeps already defragmented links as-is
         raw_url = "https://en.wikipedia.org/wiki/Python_(programming_language)"
         defragmented_url = "https://en.wikipedia.org/wiki/Python_(programming_language)"
-        self.assertEqual(scraper.defragment_url(raw_url), defragmented_url)
+        self.assertEqual(scraper.normalize_url(raw_url), defragmented_url)
 
         raw_url = "data:text/plain;base64,SGk=#frag"
         defragmented_url = "data:text/plain;base64,SGk="
@@ -57,19 +57,63 @@ class TestDefragmentURL(unittest.TestCase):
         # Verify that standalone fragment in URL is removed
         raw_url = "https://en.wikipedia.org/wiki/Python_(programming_language)#"
         defragmented_url = "https://en.wikipedia.org/wiki/Python_(programming_language)"
-        self.assertEqual(scraper.defragment_url(raw_url), defragmented_url)
+        self.assertEqual(scraper.normalize_url(raw_url), defragmented_url)
 
     def test_tricky_separators(self):
         # Ensure that defragment_link does not misidentify symbols such as '%' as a fragment
         raw_url = "https://example.com/?q=C%23"
         defragmented_url = "https://example.com/?q=C%23"
-        self.assertEqual(scraper.defragment_url(raw_url), defragmented_url)
+        self.assertEqual(scraper.normalize_url(raw_url), defragmented_url)
 
     def test_preserve_query(self):
         # Verify that defragment_link removes the fragment, but preserves the query portion of the URL
         raw_url = "https://example.com/search?q=python#top"
         defragmented_url = "https://example.com/search?q=python"
-        self.assertEqual(scraper.defragment_url(raw_url), defragmented_url)
+        self.assertEqual(scraper.normalize_url(raw_url), defragmented_url)
+
+    def test_remove_port(self):
+        raw_url = "http://ics.uci.edu:80/"
+        defragmented_url = "http://ics.uci.edu/"
+        self.assertEqual(scraper.normalize_url(raw_url), defragmented_url)
+
+        raw_url = "https://www.ics.uci.edu:443/"    
+        defragmented_url = "https://www.ics.uci.edu/"
+        self.assertEqual(scraper.normalize_url(raw_url), defragmented_url)
+
+        raw_url = "https://cs.uci.edu:8080/research/"
+        defragmented_url = "https://cs.uci.edu/research/"
+        self.assertEqual(scraper.normalize_url(raw_url), defragmented_url)
+
+        raw_url = "http://informatics.uci.edu:5000/"  
+        defragmented_url = "http://informatics.uci.edu/"
+        self.assertEqual(scraper.normalize_url(raw_url), defragmented_url)
+
+        raw_url = "https://stat.uci.edu:9999/data"
+        defragmented_url = "https://stat.uci.edu/data"
+        self.assertEqual(scraper.normalize_url(raw_url), defragmented_url)
+
+    def test_subdomains_with_ports(self):
+        raw_url = "https://faculty.ics.uci.edu:8000/people"
+        defragmented_url = "https://faculty.ics.uci.edu/people"
+        self.assertEqual(scraper.normalize_url(raw_url), defragmented_url)
+
+        raw_url = "https://archive.ics.uci.edu:3000/ml/"
+        defragmented_url = "https://archive.ics.uci.edu/ml/"
+        self.assertEqual(scraper.normalize_url(raw_url), defragmented_url)
+
+    def test_queries_and_fragments(self):
+        raw_url = "https://ics.uci.edu:8080/about?year=2025"
+        defragmented_url = "https://ics.uci.edu/about?year=2025"
+        self.assertEqual(scraper.normalize_url(raw_url), defragmented_url)
+
+        raw_url = "https://cs.uci.edu:5000/research#overview"
+        defragmented_url = "https://cs.uci.edu/research"
+        self.assertEqual(scraper.normalize_url(raw_url), defragmented_url)
+
+    def test_edge_cases(self):
+        raw_url = "https://ics.uci.edu.:8080/home"
+        defragmented_url = "https://ics.uci.edu/home"
+        self.assertEqual(scraper.normalize_url(raw_url), defragmented_url)
 
 class TestTokenizer(unittest.TestCase):
     def test_tokenizer(self):
