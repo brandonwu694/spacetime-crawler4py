@@ -6,6 +6,14 @@ from bs4.element import Comment
 
 seen_urls = set()
 longest_page = ("", 0)
+word_counter = Counter()
+subdomain_counts = defaultdict(int)
+
+STOPWORDS = {
+    "the","and","of","to","a","in","is","it","for","on","that","this","with",
+    "as","by","are","be","or","an","from","at","was","but","not","have","has",
+    "you","your","we","our","they","their","can","will","if","about"
+}
 
 def scraper(url, resp):
     links = extract_next_links(url, resp)
@@ -26,15 +34,28 @@ def extract_next_links(url, resp):
         return []
     
     soup = BeautifulSoup(resp.raw_response.content, "html.parser") # Consider swtiching to a more efficient HTML parser
-    
+
     # Track unique page and longest page by word count 
     canonical = defragment_url(resp.url or url)
+
+    #See the first time we see a page
+    first_time = canonical not in seen_urls
+
     seen_urls.add(canonical)
     words = _extract_words(soup)
+
+    #Update word counter while not in the stopwords
+    word_counter.update(w for w in words if w not in STOPWORDS)
+
     count = len(words)
     global longest_page
     if count > longest_page[1]:
         longest_page = (canonical, count)
+
+    if first_time:
+        host = urlparse(canonical).netloc.lower()
+        if host.endswith(".uci.edu"):
+            subdomain_counts[host] += 1
 
     # Find all <a> tags with a hypertext reference (href) attribute
     for link in soup.find_all("a", href=True): 
