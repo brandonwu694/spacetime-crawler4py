@@ -36,7 +36,7 @@ def extract_next_links(url, resp):
     soup = BeautifulSoup(resp.raw_response.content, "html.parser") # Consider swtiching to a more efficient HTML parser
 
     # Track unique page and longest page by word count 
-    canonical = defragment_url(resp.url or url)
+    canonical = normalize_url(resp.url or url)
 
     #See the first time we see a page
     first_time = canonical not in seen_urls
@@ -62,13 +62,14 @@ def extract_next_links(url, resp):
         href = link.get("href")
         href = href.strip() # Remove any whitespaces the URL may have
         absolute_url = urljoin(url, href) # Convert relative URLs to absolute URLs
-        extracted_links.add(defragment_url(absolute_url)) # Defragment link and add to set of extracted links
+        extracted_links.add(normalize_url(absolute_url)) # Defragment link and add to set of extracted links
 
     return list(extracted_links)
 
-def defragment_url(url: str):
-    """"Remove fragment from URL"""
-    return urlparse(url)._replace(fragment="").geturl()
+def normalize_url(url: str):
+    """"Remove fragment and port number from URL"""
+    parsed = urlparse(url)
+    return parsed._replace(netloc=parsed.netloc.split(":", 1)[0].rstrip("."), fragment="").geturl()
 
 # Use re.compile to convert file attachment into a regex object
 # The regex object has useful methods such as search(), findall()
