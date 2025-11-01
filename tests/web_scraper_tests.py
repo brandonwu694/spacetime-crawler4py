@@ -115,6 +115,22 @@ class TestNormalizeURL(unittest.TestCase):
         defragmented_url = "https://ics.uci.edu/home"
         self.assertEqual(scraper.normalize_url(raw_url), defragmented_url)
 
+    def test_sort_queries(self):
+        # Ensure that URLs with the same queries, but with same key-value pairs in different orders return the same normalized URL
+        urls = ["https://ics.uci.edu/data?a=1&a=3&b=2",
+                "https://ics.uci.edu/data?b=2&a=3&a=1", 
+                "https://ics.uci.edu/data?a=3&b=2&a=1"]
+        res = set()
+        for url in urls:
+            res.add(scraper.normalize_url(url))
+
+        # All URLs should be normalized to the same URL, with query parameters sorted in alphabetical order
+        self.assertEqual(len(res), 1)
+
+    def test_drop_tracking_parameters(self):
+        url = "https://ics.uci.edu/about?utm_source=google&utm_medium=email&section=faculty"
+        self.assertEqual(scraper.normalize_url(url), "https://ics.uci.edu/about?section=faculty")
+
 class TestTokenizer(unittest.TestCase):
     def test_tokenizer(self):
         html = """

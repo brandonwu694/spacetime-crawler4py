@@ -1,5 +1,5 @@
 import re
-from urllib.parse import urlparse, urljoin
+from urllib.parse import urlparse, urljoin, urlunparse, parse_qsl, urlencode
 from bs4 import BeautifulSoup
 from collections import Counter, defaultdict
 from bs4.element import Comment
@@ -57,6 +57,9 @@ def extract_next_links(url, resp):
     #         resp.raw_response.content: the content of the page!
     # Return a list with the hyperlinks (as strings) scrapped from resp.raw_response.content
     # Early return if response is invalid
+    if not url or len(url) > 2000:
+        return []
+    
     if resp.status != 200 or resp.raw_response is None or resp.raw_response.content is None:
         return []
     # Add HTML content check here
@@ -121,10 +124,40 @@ def extract_next_links(url, resp):
     return list(extracted_links)
 
 
+# Key values in query that are not relevant to the content of a web page
+TRACKING_PARAMS = frozenset({
+    "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content",
+    "gclid", "dclid",
+    "fbclid", "igshid",
+    "_hsenc", "_hsmi",
+    "session", "phpsessid", "jsessionid", "ref", "refsrc", "source",
+    "mc_cid", "mc_eid", "trk", "campaignid", "adgroupid"
+})
+
+
 def normalize_url(url: str):
-    """"Remove fragment and port number from URL"""
+    """"Remove fragment and port number from URL"""   
     parsed = urlparse(url)
-    return parsed._replace(netloc=parsed.netloc.split(":", 1)[0].rstrip("."), fragment="").geturl()
+    scheme = parsed.scheme.lower()
+    # Take the parsed hostname if it is exists and remove any trailing dots
+    # 'or ""' is simply a defensive check in the rare case that a URL does not contain a hostname
+    host = (parsed.hostname or "").rstrip(".").lower()
+    netloc = host
+    # Ensure that all URLs are delimited by a singular '/' so the same site is only visited once
+    path = parsed.path.replace("//", "/")
+
+    # Sort in alphabetical order by key, use value as a tiebreaker for sorting
+    order_query = sorted(parse_qsl(parsed.query, keep_blank_values=True))
+    params = []
+    for key, value in order_query:
+        if key.lower() not in TRACKING_PARAMS:
+            params.append((key, value))
+    
+    # Key-value pairs in the query should now be sorted
+    clean_query = urlencode(params, doseq=True)
+
+    new_parsed = parsed._replace(scheme=scheme, netloc=netloc, path=path, query=clean_query, fragment="")
+    return urlunparse(new_parsed)
 
 
 DISALLOWED_TAGS = frozenset({"style", "script", "head", "title", "meta", "[document]"})
