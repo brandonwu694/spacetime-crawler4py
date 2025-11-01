@@ -220,7 +220,6 @@ def compute_page_hash(content):
 
 def compute_simhash(words):
     """Compute a simple simhash value for near-duplicate detection."""
-    from collections import Counter
     hash_bits = [0] * 64
     for word, freq in Counter(words).items():
         h = int(hashlib.md5(word.encode("utf-8")).hexdigest(), 16)
