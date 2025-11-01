@@ -1,3 +1,13 @@
+import multiprocessing
+
+# Fix macOS spawn-mode pickling issues
+try:
+    multiprocessing.set_start_method('fork')
+except RuntimeError:
+    # If already set, ignore
+    pass
+
+
 from configparser import ConfigParser
 from argparse import ArgumentParser
 
