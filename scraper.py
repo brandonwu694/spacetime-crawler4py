@@ -43,8 +43,7 @@ STOPWORDS = frozenset({
 
 def scraper(url, resp):
     links = extract_next_links(url, resp)
-    normalized_links = [normalize_url(link) for link in links]
-    return [link for link in normalized_links if is_valid(link)]
+    return [link for link in links if is_valid(link)]
 
 
 def extract_next_links(url, resp):
@@ -60,21 +59,18 @@ def extract_next_links(url, resp):
     # Early return if response is invalid
     if resp.status != 200 or resp.raw_response is None or resp.raw_response.content is None:
         return []
-    # --- Add HTML content check here ---
+    # Add HTML content check here
     content_type = resp.raw_response.headers.get("Content-Type", "").lower()
     if "html" not in content_type:
         return []
 
     extracted_links = set()
-    if resp.status != 200 or resp.raw_response is None or resp.raw_response.content is None:
-        return []
 
     try:
         soup = BeautifulSoup(resp.raw_response.content, "lxml")
     except Exception as e:
-        print(f"Error parsing HTML at {url}: {e}")
-        return []
-    # --- Exact and near-duplicate detection ---
+        soup = BeautifulSoup(resp.raw_response.content, "html.parser")
+    # Exact and near-duplicate detection
     text_content = soup.get_text(separator=' ', strip=True)
     page_hash = compute_page_hash(text_content)
 
@@ -89,7 +85,7 @@ def extract_next_links(url, resp):
     simhash = compute_simhash(words)
 
     for old_hash in seen_simhashes:
-        if hamming_distance(simhash, old_hash) < 5:  # threshold can be tuned
+        if hamming_distance(simhash, old_hash) < 5:  # Threshold can be tuned
             print(f"Skipping near-duplicate: {url}")
             return []
     seen_simhashes.add(simhash)
@@ -101,7 +97,6 @@ def extract_next_links(url, resp):
     first_time = canonical not in seen_urls
 
     seen_urls.add(canonical)
-    words = _extract_words(soup)
 
     # Update word counter while not in the stopwords
     word_counter.update(w for w in words if w not in STOPWORDS)
@@ -121,7 +116,7 @@ def extract_next_links(url, resp):
         href = link.get("href")
         href = href.strip()  # Remove any whitespaces the URL may have
         absolute_url = urljoin(url, href)  # Convert relative URLs to absolute URLs
-        extracted_links.add(normalize_url(absolute_url))  # Defragment link and add to set of extracted links
+        extracted_links.add(normalize_url(absolute_url))  # Defragment and remove port from link and add to set of extracted links
 
     return list(extracted_links)
 
@@ -168,6 +163,7 @@ FILETYPE_PATTERN = re.compile(
     r"dmg|iso|epub|dll|cnf|tgz|sha1|thmx|mso|arff|rtf|jar|csv|"
     r"rm|smil|wmv|swf|wma|zip|rar|gz)$"
 )
+
 
 VALID_SCHEMES = frozenset({"https", "http"})
 
