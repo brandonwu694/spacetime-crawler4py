@@ -56,10 +56,7 @@ def extract_next_links(url, resp):
     #         resp.raw_response.url: the url, again
     #         resp.raw_response.content: the content of the page!
     # Return a list with the hyperlinks (as strings) scrapped from resp.raw_response.content
-    # Early return if response is invalid
-    if not url or len(url) > 2000:
-        return []
-    
+    # Early return if response is invalid    
     if resp.status != 200 or resp.raw_response is None or resp.raw_response.content is None:
         return []
     # Add HTML content check here
@@ -241,7 +238,13 @@ def hamming_distance(x, y):
 def is_valid(url: str, _pattern=FILETYPE_PATTERN, _valid_schemes=VALID_SCHEMES) -> bool:
     """Ensures that crawled URLs are HTTP or HTTPs protocol and within the specified domain"""
     try:
+        if not url or len(url) > 2000:
+            return False
         parsed = urlparse(url)
+        if len(parsed.query) > 1000:
+            return False
+        if parsed.path.count("/") > 15:
+            return False
         if parsed.scheme.lower() not in _valid_schemes:
             return False
         path = parsed.path
