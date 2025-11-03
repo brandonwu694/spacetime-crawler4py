@@ -118,6 +118,9 @@ def extract_next_links(url, resp):
         absolute_url = urljoin(url, href)  # Convert relative URLs to absolute URLs
         extracted_links.add(
             normalize_url(absolute_url))  # Defragment and remove port from link and add to set of extracted links
+        
+    write_metrics()
+    write_subdomain_counts()
 
     return list(extracted_links)
 
@@ -272,4 +275,39 @@ def is_valid(url):
         return True
     except Exception:
         return False
+    
 
+def write_metrics():
+    """Log metrics in file metrics.txt
+        1. Number of unique pages
+        2. Longest page in terms of words
+        3. Top 50 Most Common Words"""
+    with open("metrics.txt", "w", encoding="utf-8") as f:
+        try:
+            f.write("=== 1) Unique Pages ===\n")
+            f.write(f"Total unique pages: {len(seen_urls)}\n\n")
+
+            f.write("=== 2) Longest Page ===\n")
+            f.write(f"Longest page in terms of words: {longest_page[0]}, {longest_page[1]} words\n\n")
+
+            f.write("=== 3) 50 Most Common Words ===\n")
+            for word, count in word_counter.most_common(50):
+                f.write(f"{word}, {count}\n")
+        except NameError as e:
+            print(f"Error occurred with retrieving metrics - {e}")
+        except Exception as e:
+            print(f"Exception occurred: {e}")
+
+
+def write_subdomain_counts():
+    """Log subdomains and number of unique pages per subdomain in file subdomain_counts.txt ordered alphabetically"""
+    try:
+        sorted_subdomains = sorted(subdomain_counts.items())
+        with open("subdomain_counts.txt", "w", encoding="utf-8") as f:
+            f.write("=== Subdomain Summary ===\n")
+            for subdomain, count in sorted_subdomains:
+                f.write(f"{subdomain}, {count}\n")
+    except NameError as e:
+            print(f"Error occurred with retrieving subdomain metrics - {e}")
+    except Exception as e:
+            print(f"Exception occurred: {e}")
