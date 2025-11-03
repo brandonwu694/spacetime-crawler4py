@@ -116,7 +116,8 @@ def extract_next_links(url, resp):
         href = link.get("href")
         href = href.strip()  # Remove any whitespaces the URL may have
         absolute_url = urljoin(url, href)  # Convert relative URLs to absolute URLs
-        extracted_links.add(normalize_url(absolute_url))  # Defragment and remove port from link and add to set of extracted links
+        extracted_links.add(
+            normalize_url(absolute_url))  # Defragment and remove port from link and add to set of extracted links
 
     return list(extracted_links)
 
@@ -133,7 +134,7 @@ TRACKING_PARAMS = frozenset({
 
 
 def normalize_url(url: str):
-    """"Remove fragment and port number from URL"""   
+    """"Remove fragment and port number from URL"""
     parsed = urlparse(url)
     scheme = parsed.scheme.lower()
     # Take the parsed hostname if it is exists and remove any trailing dots
@@ -149,7 +150,7 @@ def normalize_url(url: str):
     for key, value in order_query:
         if key.lower() not in TRACKING_PARAMS:
             params.append((key, value))
-    
+
     # Key-value pairs in the query should now be sorted
     clean_query = urlencode(params, doseq=True)
 
@@ -194,7 +195,6 @@ FILETYPE_PATTERN = re.compile(
     r"rm|smil|wmv|swf|wma|zip|rar|gz)$"
 )
 
-
 VALID_SCHEMES = frozenset({"https", "http"})
 
 
@@ -235,24 +235,41 @@ def hamming_distance(x, y):
     return bin(x ^ y).count("1")
 
 
-def is_valid(url: str, _pattern=FILETYPE_PATTERN, _valid_schemes=VALID_SCHEMES) -> bool:
-    """Ensures that crawled URLs are HTTP or HTTPs protocol and within the specified domain"""
+def is_valid(url):
     try:
         if not url or len(url) > 2000:
             return False
+
         parsed = urlparse(url)
-        if len(parsed.query) > 1000:
+        scheme = parsed.scheme.lower()
+        netloc = parsed.netloc.lower()
+        path = parsed.path or ""
+        query = parsed.query or ""
+
+        if scheme not in VALID_SCHEMES:
             return False
-        if parsed.path.count("/") > 15:
+        if not re.search(r"(ics\.uci\.edu|cs\.uci\.edu|informatics\.uci\.edu|stat\.uci\.edu)$", netloc):
             return False
-        if parsed.scheme.lower() not in _valid_schemes:
+        if FILETYPE_PATTERN.search(path.lower()):
             return False
-        path = parsed.path
-        if path and _pattern.search(path.lower()):
+        if len(query) > 1000 or path.count("/") > 15:
             return False
-        if not re.search(r"(ics\.uci\.edu|cs\.uci\.edu|informatics\.uci\.edu|stat\.uci\.edu)$", parsed.netloc.lower()):
+        if re.search(r"/\d{4}/\d{2}/\d{2}", path):
+            return False
+        if re.search(r"(page|p)=\d{3,}", query):
+            return False
+        segments = [seg for seg in path.strip("/").split("/") if seg]
+        if len(segments) > 3 and len(set(segments)) < len(segments) / 2:
+            return False
+        if re.search(r"(sessionid|jsessionid|phpsessid|sid|token|ref)=\w+", query, re.IGNORECASE):
+            return False
+        if re.search(r"(session|login|logout)[=/]?", path, re.IGNORECASE):
+            return False
+        if len(netloc.split(".")) > 4:
+            return False
+        if any(len(seg) > 100 for seg in segments):
             return False
         return True
-    except TypeError:
-        print("TypeError for ", parsed)
-        raise
+    except Exception:
+        return False
+
