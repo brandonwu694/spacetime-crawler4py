@@ -47,62 +47,41 @@ def scraper(url, resp):
 
 
 def extract_next_links(url, resp):
-    # Implementation required.
-    # url: the URL that was used to get the page
-    # resp.url: the actual url of the page
-    # resp.status: the status code returned by the server. 200 is OK, you got the page. Other numbers mean that there was some kind of problem.
-    # resp.error: when status is not 200, you can check the error here, if needed.
-    # resp.raw_response: this is where the page actually is. More specifically, the raw_response has two parts:
-    #         resp.raw_response.url: the url, again
-    #         resp.raw_response.content: the content of the page!
-    # Return a list with the hyperlinks (as strings) scrapped from resp.raw_response.content
-    # Early return if response is invalid    
+    global longest_page
+
     if resp.status != 200 or resp.raw_response is None or resp.raw_response.content is None:
         return []
-    # Add HTML content check here
+
     content_type = resp.raw_response.headers.get("Content-Type", "").lower()
     if "html" not in content_type:
         return []
 
-    extracted_links = set()
-
     try:
         soup = BeautifulSoup(resp.raw_response.content, "lxml")
-    except Exception as e:
+    except Exception:
         soup = BeautifulSoup(resp.raw_response.content, "html.parser")
-    # Exact and near-duplicate detection
+
     text_content = soup.get_text(separator=' ', strip=True)
     page_hash = compute_page_hash(text_content)
-
-    # Check for exact duplicates
     if page_hash in seen_hashes:
         print(f"Skipping exact duplicate: {url}")
         return []
     seen_hashes.add(page_hash)
 
-    # Compute near-duplicate similarity (SimHash)
     words = _extract_words(soup)
     simhash = compute_simhash(words)
-
     for old_hash in seen_simhashes:
-        if hamming_distance(simhash, old_hash) < 5:  # Threshold can be tuned
+        if hamming_distance(simhash, old_hash) < 5:
             print(f"Skipping near-duplicate: {url}")
             return []
     seen_simhashes.add(simhash)
 
-    # Track unique page and longest page by word count
     canonical = normalize_url(resp.url or url)
-
-    # See the first time we see a page
     first_time = canonical not in seen_urls
-
     seen_urls.add(canonical)
 
-    # Update word counter while not in the stopwords
     word_counter.update(w for w in words if w not in STOPWORDS)
-
     count = len(words)
-    global longest_page
     if count > longest_page[1]:
         longest_page = (canonical, count)
 
@@ -111,18 +90,60 @@ def extract_next_links(url, resp):
         if host.endswith(".uci.edu"):
             subdomain_counts[host] += 1
 
-    # Find all <a> tags with a hypertext reference (href) attribute
+    raw_links = []
     for link in soup.find_all("a", href=True):
-        href = link.get("href")
-        href = href.strip()  # Remove any whitespaces the URL may have
-        absolute_url = urljoin(url, href)  # Convert relative URLs to absolute URLs
-        extracted_links.add(
-            normalize_url(absolute_url))  # Defragment and remove port from link and add to set of extracted links
-        
+        href = link.get("href").strip()
+        try:
+            abs_link = urljoin(resp.url or url, href)
+        except Exception:
+            continue
+        raw_links.append(abs_link)
+
+    # --- Adaptive Trap Detection Logic ---
+    host = urlparse(canonical).netloc.lower()
+    pages_seen = subdomain_counts.get(host, 0)
+    link_limit = 400 + pages_seen * 10          # increase limit gradually
+    same_host_limit = 250 + pages_seen * 5      # increase host-link limit gradually
+
+    # 1. Too many outlinks → likely trap
+    if len(raw_links) > link_limit:
+        print(f"[Trap] {canonical} has {len(raw_links)} outlinks (limit {link_limit}) — skipping.")
+        return []
+
+    # 2. Repetitive pattern trap (calendar, numeric loops)
+    def pattern_for(u):
+        try:
+            p = urlparse(u)
+            path = re.sub(r"\d+", "{d}", p.path)
+            query = re.sub(r"\d+", "{d}", p.query)
+            return f"{p.netloc}{path}?{query}"
+        except Exception:
+            return ""
+    patterns = Counter(pattern_for(u) for u in raw_links)
+    if patterns:
+        most_common, freq = patterns.most_common(1)[0]
+        if freq > 80 and freq / len(raw_links) > 0.6:
+            print(f"[Trap] {canonical} repeating pattern {most_common} — limiting.")
+            raw_links = list({u for u in raw_links if pattern_for(u) != most_common})[:50]
+
+    # 3. Overly concentrated in one host → self-loop or redirect trap
+    host_counts = Counter(urlparse(u).netloc.lower() for u in raw_links)
+    if host_counts and host_counts.most_common(1)[0][1] > same_host_limit:
+        print(f"[Trap] {canonical} has >{same_host_limit} links to same host — trimming.")
+        allowed_hosts = {h for h, _ in host_counts.most_common(10)}
+        raw_links = [u for u in raw_links if urlparse(u).netloc.lower() in allowed_hosts][:same_host_limit]
+    # --- End Adaptive Trap Detection ---
+
+    extracted_links = set()
+    for link in raw_links:
+        normalized = normalize_url(link)
+        if is_valid(normalized):
+            extracted_links.add(normalized)
+
     write_metrics()
     write_subdomain_counts()
-
     return list(extracted_links)
+
 
 
 # Key values in query that are not relevant to the content of a web page
@@ -179,8 +200,7 @@ def _tag_visible(el, _disallowed=DISALLOWED_TAGS):
 
 
 # Regex patterm that matches sequences of one or more alphabetic character(s), ensuring there is a word boundary
-_word_re = re.compile(r"\b[a-zA-Z]+\b")
-
+_word_re = re.compile(r"\b[a-zA-Z0-9]+\b")
 
 def _extract_words(soup):
     """Extract words visible words to user on given URL page"""
