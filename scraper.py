@@ -4,6 +4,7 @@ from bs4 import BeautifulSoup
 from collections import Counter, defaultdict
 from bs4.element import Comment
 import hashlib
+import unicodedata
 
 seen_hashes = set()  # For exact duplicate detection
 seen_simhashes = set()  # For near-duplicate detection
@@ -61,7 +62,11 @@ def extract_next_links(url, resp):
     except Exception:
         soup = BeautifulSoup(resp.raw_response.content, "html.parser")
 
-    text_content = soup.get_text(separator=' ', strip=True)
+    texts = soup.find_all(string=True)
+    visible_texts = (t.strip() for t in texts if _tag_visible(t))
+    text_content = " ".join(t for t in visible_texts if t)
+    text_content = unicodedata.normalize("NFKC", text_content)
+
     page_hash = compute_page_hash(text_content)
     if page_hash in seen_hashes:
         print(f"Skipping exact duplicate: {url}")
@@ -100,12 +105,11 @@ def extract_next_links(url, resp):
         raw_links.append(abs_link)
 
     # --- Adaptive Trap Detection Logic ---
-    host = urlparse(canonical).netloc.lower()
     pages_seen = subdomain_counts.get(host, 0)
     link_limit = 400 + pages_seen * 10          # increase limit gradually
     same_host_limit = 250 + pages_seen * 5      # increase host-link limit gradually
 
-    # 1. Too many outlinks → likely trap
+    # 1. Too many outlinks, likely a trap
     if len(raw_links) > link_limit:
         print(f"[Trap] {canonical} has {len(raw_links)} outlinks (limit {link_limit}) — skipping.")
         return []
@@ -119,6 +123,7 @@ def extract_next_links(url, resp):
             return f"{p.netloc}{path}?{query}"
         except Exception:
             return ""
+    
     patterns = Counter(pattern_for(u) for u in raw_links)
     if patterns:
         most_common, freq = patterns.most_common(1)[0]
@@ -163,8 +168,10 @@ def normalize_url(url: str):
     scheme = parsed.scheme.lower()
     # Take the parsed hostname if it is exists and remove any trailing dots
     # 'or ""' is simply a defensive check in the rare case that a URL does not contain a hostname
-    host = (parsed.hostname or "").rstrip(".").lower()
-    netloc = host
+    hostname = (parsed.hostname or "").rstrip(".").lower()
+    if hostname.startswith("www."):
+        hostname = hostname[4:]
+    netloc = hostname
     # Ensure that all URLs are delimited by a singular '/' so the same site is only visited once
     path = parsed.path.replace("//", "/")
 
@@ -221,11 +228,13 @@ FILETYPE_PATTERN = re.compile(
 VALID_SCHEMES = frozenset({"https", "http"})
 
 
+# Unused function
 def compute_shingles(words, k=5):
     """Return a set of k-word shingles for the given list of words."""
     return {" ".join(words[i:i + k]) for i in range(len(words) - k + 1)}
 
 
+# Unused function
 def jaccard_similarity(set1, set2):
     """Compute Jaccard similarity between two sets."""
     if not set1 or not set2:

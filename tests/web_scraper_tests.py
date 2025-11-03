@@ -77,7 +77,7 @@ class TestNormalizeURL(unittest.TestCase):
         self.assertEqual(scraper.normalize_url(raw_url), defragmented_url)
 
         raw_url = "https://www.ics.uci.edu:443/"    
-        defragmented_url = "https://www.ics.uci.edu/"
+        defragmented_url = "https://ics.uci.edu/"
         self.assertEqual(scraper.normalize_url(raw_url), defragmented_url)
 
         raw_url = "https://cs.uci.edu:8080/research/"
@@ -130,6 +130,11 @@ class TestNormalizeURL(unittest.TestCase):
     def test_drop_tracking_parameters(self):
         url = "https://ics.uci.edu/about?utm_source=google&utm_medium=email&section=faculty"
         self.assertEqual(scraper.normalize_url(url), "https://ics.uci.edu/about?section=faculty")
+
+    def test_urls_with_www(self):
+        raw_url = "https://www.ics.uci.edu"
+        normalized_url = "https://ics.uci.edu"
+        self.assertEqual(scraper.normalize_url(raw_url), normalized_url)
 
 class TestTokenizer(unittest.TestCase):
     def test_tokenizer(self):
