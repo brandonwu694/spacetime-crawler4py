@@ -286,10 +286,8 @@ def write_metrics():
         try:
             f.write("=== 1) Unique Pages ===\n")
             f.write(f"Total unique pages: {len(seen_urls)}\n\n")
-
             f.write("=== 2) Longest Page ===\n")
             f.write(f"Longest page in terms of words: {longest_page[0]}, {longest_page[1]} words\n\n")
-
             f.write("=== 3) 50 Most Common Words ===\n")
             for word, count in word_counter.most_common(50):
                 f.write(f"{word}, {count}\n")
