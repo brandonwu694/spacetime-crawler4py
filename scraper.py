@@ -5,12 +5,13 @@ from collections import Counter, defaultdict
 from bs4.element import Comment
 import hashlib
 import unicodedata
-import posixpath
 
 
 seen_hashes = set()  # For exact duplicate detection
 seen_simhashes = set()  # For near-duplicate detection
 
+page_hashes = set()
+page_shingles = []
 longest_page = ("", 0)
 word_counter = Counter()
 subdomain_counts = defaultdict(int)
@@ -44,6 +45,8 @@ STOPWORDS = frozenset({
     "weren't", 'won', "won't", 'wouldn', "wouldn't"
 })
 
+seen_hashes = set()
+
 
 def scraper(url, resp):
     links = extract_next_links(url, resp)
@@ -55,7 +58,7 @@ def extract_next_links(url, resp):
 
     if resp.status != 200 or resp.raw_response is None or resp.raw_response.content is None:
         return []
-    
+
     content = resp.raw_response.content
     if content is None or len(content) == 0:
         return []
@@ -103,7 +106,7 @@ def extract_next_links(url, resp):
     report_urls.add(canonical)
 
     count = len(words)
-    
+
     if not dup_exact and not dup_near and count >= LOW_INFO_MIN:
         word_counter.update(w for w in words if w not in STOPWORDS)
         if count > longest_page[1]:
@@ -144,7 +147,7 @@ def extract_next_links(url, resp):
             return f"{p.netloc}{path}?{query}"
         except Exception:
             return ""
-    
+
     patterns = Counter(pattern_for(u) for u in raw_links)
     if patterns:
         most_common, freq = patterns.most_common(1)[0]
@@ -199,34 +202,16 @@ def normalize_url(url: str):
     if hostname.startswith("www."):
         hostname = hostname[4:]
 
-<<<<<<< HEAD
     # Port: keep non-default ports
-=======
-    # Keep non-default ports, drop only default ports
->>>>>>> fa19c517c48fb50b6c80c1b87f569e6b85b86877
     port = parsed.port
     netloc = hostname
     if port and port not in (80, 443):
         netloc = f"{hostname}:{port}"
 
-<<<<<<< HEAD
     # Path normalization
     path = parsed.path.replace("//", "/")
     if path != "/" and path.endswith("/"):
         path = path.rstrip("/")
-=======
-    # Ensure that all URLs are delimited by a singular '/' so the same site is only visited once
-    path = parsed.path or "/"
-    path = path.replace("//", "/")
-    path = posixpath.normpath(path)
-    if not path.startswith("/"):
-        path = "/" + path
-    if path == "/.":
-        path = "/"
-
-    if parsed.path.endswith("/") and not path.endswith("/"):
-        path += "/"
->>>>>>> fa19c517c48fb50b6c80c1b87f569e6b85b86877
 
     # Query normalization: remove tracking params and sort
     order_query = sorted(parse_qsl(parsed.query, keep_blank_values=True))
