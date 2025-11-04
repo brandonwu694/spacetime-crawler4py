@@ -185,48 +185,67 @@ TRACKING_PARAMS = frozenset({
 })
 
 
-def normalize_url(url: str):
-    """Normalize URLs by removing fragments, standardizing hostname, handling ports, and cleaning query parameters."""
+def normalize_url(url: str) -> str | None:
+    """
+    Normalize URLs by:
+    - Adding https if missing
+    - Lowercasing hostname and removing 'www.'
+    - Removing fragments
+    - Removing tracking query parameters
+    - Cleaning and sorting query parameters
+    Returns normalized URL or None if invalid.
+    """
+    try:
+        if not url:
+            return None
 
-    # Add scheme if missing
-    if not re.match(r"^https?://", url):
-        url = "https://" + url
+        # Add scheme if missing
+        if not re.match(r"^https?://", url):
+            url = "https://" + url
 
-    parsed = urlparse(url)
+        parsed = urlparse(url)
 
-    # Scheme
-    scheme = parsed.scheme.lower()
+        # Scheme
+        scheme = parsed.scheme.lower()
 
-    # Hostname: lowercase, remove trailing dots, remove www.
-    hostname = (parsed.hostname or "").rstrip(".").lower()
-    if hostname.startswith("www."):
-        hostname = hostname[4:]
+        # Hostname: lowercase, remove trailing dots, remove www.
+        hostname = (parsed.hostname or "").rstrip(".").lower()
+        if hostname.startswith("www."):
+            hostname = hostname[4:]
+        if not hostname:
+            return None
 
-    # Port: keep non-default ports
-    port = parsed.port
-    netloc = hostname
-    if port and port not in (80, 443):
-        netloc = f"{hostname}:{port}"
+        # Port: keep non-default ports
+        port = parsed.port
+        netloc = hostname
+        if port and port not in (80, 443):
+            netloc = f"{hostname}:{port}"
 
-    # Path normalization
-    path = parsed.path.replace("//", "/")
-    if path != "/" and path.endswith("/"):
-        path = path.rstrip("/")
+        # Path normalization
+        path = parsed.path.replace("//", "/")
+        if path != "/" and path.endswith("/"):
+            path = path.rstrip("/")
 
-    # Query normalization: remove tracking params and sort
-    order_query = sorted(parse_qsl(parsed.query, keep_blank_values=True))
-    params = [(k, v) for k, v in order_query if k.lower() not in TRACKING_PARAMS]
-    clean_query = urlencode(params, doseq=True)
+        # Query normalization: remove tracking params and sort
+        order_query = sorted(parse_qsl(parsed.query, keep_blank_values=True))
+        params = [(k, v) for k, v in order_query if k.lower() not in TRACKING_PARAMS]
+        clean_query = urlencode(params, doseq=True)
 
-    # Rebuild URL
-    new_parsed = parsed._replace(
-        scheme=scheme,
-        netloc=netloc,
-        path=path,
-        query=clean_query,
-        fragment=""  # Remove fragment
-    )
-    return urlunparse(new_parsed)
+        # Rebuild URL
+        new_parsed = parsed._replace(
+            scheme=scheme,
+            netloc=netloc,
+            path=path,
+            query=clean_query,
+            fragment=""  # Remove fragment
+        )
+        return urlunparse(new_parsed)
+
+    except Exception as e:
+        # Log the URL and the exception, then skip
+        print(f"[normalize_url] Failed to normalize URL '{url}': {e}")
+        return None
+
 
 
 DISALLOWED_TAGS = frozenset({"style", "script", "head", "title", "meta", "[document]"})
