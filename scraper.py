@@ -111,7 +111,7 @@ def extract_next_links(url, resp):
             longest_page = (canonical, count)
 
     if first_time:
-        host = urlparse(canonical).netloc.lower()
+        host = str(urlparse(canonical).netloc.lower())
         if host.endswith(".uci.edu"):
             subdomain_counts[host] += 1
     else:
@@ -243,7 +243,6 @@ def normalize_url(url: str) -> str | None:
         # Log the URL and the exception, then skip
         print(f"[normalize_url] Failed to normalize URL '{url}': {e}")
         return None
-
 
 
 DISALLOWED_TAGS = frozenset({"style", "script", "head", "title", "meta", "[document]"})
