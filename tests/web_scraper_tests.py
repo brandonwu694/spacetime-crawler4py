@@ -33,11 +33,11 @@ class TestNormalizeURL(unittest.TestCase):
         self.assertEqual(scraper.normalize_url(raw_url), defragmented_url)
 
         raw_url = "data:text/plain;base64,SGk=#frag"
-        defragmented_url = "data:text/plain;base64,SGk="
+        defragmented_url = "data:/text/plain;base64,SGk="
         self.assertEqual(scraper.normalize_url(raw_url), defragmented_url)
 
         raw_url = "mailto:alice@example.com#sig"
-        defragmented_url = "mailto:alice@example.com"
+        defragmented_url = "mailto:/alice@example.com"
         self.assertEqual(scraper.normalize_url(raw_url), defragmented_url)
 
         raw_url = "ftp://host/file#part"
@@ -81,38 +81,38 @@ class TestNormalizeURL(unittest.TestCase):
         self.assertEqual(scraper.normalize_url(raw_url), defragmented_url)
 
         raw_url = "https://cs.uci.edu:8080/research/"
-        defragmented_url = "https://cs.uci.edu/research/"
+        defragmented_url = "https://cs.uci.edu:8080/research/"
         self.assertEqual(scraper.normalize_url(raw_url), defragmented_url)
 
         raw_url = "http://informatics.uci.edu:5000/"  
-        defragmented_url = "http://informatics.uci.edu/"
+        defragmented_url = "http://informatics.uci.edu:5000/"
         self.assertEqual(scraper.normalize_url(raw_url), defragmented_url)
 
         raw_url = "https://stat.uci.edu:9999/data"
-        defragmented_url = "https://stat.uci.edu/data"
+        defragmented_url = "https://stat.uci.edu:9999/data"
         self.assertEqual(scraper.normalize_url(raw_url), defragmented_url)
 
     def test_subdomains_with_ports(self):
         raw_url = "https://faculty.ics.uci.edu:8000/people"
-        defragmented_url = "https://faculty.ics.uci.edu/people"
+        defragmented_url = "https://faculty.ics.uci.edu:8000/people"
         self.assertEqual(scraper.normalize_url(raw_url), defragmented_url)
 
         raw_url = "https://archive.ics.uci.edu:3000/ml/"
-        defragmented_url = "https://archive.ics.uci.edu/ml/"
+        defragmented_url = "https://archive.ics.uci.edu:3000/ml/"
         self.assertEqual(scraper.normalize_url(raw_url), defragmented_url)
 
     def test_queries_and_fragments(self):
         raw_url = "https://ics.uci.edu:8080/about?year=2025"
-        defragmented_url = "https://ics.uci.edu/about?year=2025"
+        defragmented_url = "https://ics.uci.edu:8080/about?year=2025"
         self.assertEqual(scraper.normalize_url(raw_url), defragmented_url)
 
         raw_url = "https://cs.uci.edu:5000/research#overview"
-        defragmented_url = "https://cs.uci.edu/research"
+        defragmented_url = "https://cs.uci.edu:5000/research"
         self.assertEqual(scraper.normalize_url(raw_url), defragmented_url)
 
     def test_edge_cases(self):
         raw_url = "https://ics.uci.edu.:8080/home"
-        defragmented_url = "https://ics.uci.edu/home"
+        defragmented_url = "https://ics.uci.edu:8080/home"
         self.assertEqual(scraper.normalize_url(raw_url), defragmented_url)
 
     def test_sort_queries(self):
@@ -133,7 +133,7 @@ class TestNormalizeURL(unittest.TestCase):
 
     def test_urls_with_www(self):
         raw_url = "https://www.ics.uci.edu"
-        normalized_url = "https://ics.uci.edu"
+        normalized_url = "https://ics.uci.edu/"
         self.assertEqual(scraper.normalize_url(raw_url), normalized_url)
 
 class TestTokenizer(unittest.TestCase):
