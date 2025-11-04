@@ -227,21 +227,6 @@ FILETYPE_PATTERN = re.compile(
 
 VALID_SCHEMES = frozenset({"https", "http"})
 
-
-# Unused function
-def compute_shingles(words, k=5):
-    """Return a set of k-word shingles for the given list of words."""
-    return {" ".join(words[i:i + k]) for i in range(len(words) - k + 1)}
-
-
-# Unused function
-def jaccard_similarity(set1, set2):
-    """Compute Jaccard similarity between two sets."""
-    if not set1 or not set2:
-        return 0
-    return len(set1 & set2) / len(set1 | set2)
-
-
 def compute_page_hash(content):
     """Compute a SHA256 hash of the page text for exact duplicate detection."""
     return hashlib.sha256(content.encode("utf-8")).hexdigest()
