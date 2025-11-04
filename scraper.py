@@ -11,10 +11,13 @@ seen_simhashes = set()  # For near-duplicate detection
 
 page_hashes = set()
 page_shingles = []
-seen_urls = set()
 longest_page = ("", 0)
 word_counter = Counter()
 subdomain_counts = defaultdict(int)
+report_urls = set()
+
+LOW_INFO_MIN = 30
+MAX_BYTES = 5_000_000
 
 STOPWORDS = frozenset({
     'i', 'me', 'my', 'myself', 'we', 'our', 'ours', 'ourselves', 'you',
@@ -41,6 +44,7 @@ STOPWORDS = frozenset({
     "weren't", 'won', "won't", 'wouldn', "wouldn't"
 })
 
+seen_hashes = set()
 
 def scraper(url, resp):
     links = extract_next_links(url, resp)
@@ -52,10 +56,18 @@ def extract_next_links(url, resp):
 
     if resp.status != 200 or resp.raw_response is None or resp.raw_response.content is None:
         return []
+    
+    content = resp.raw_response.content
+    if content is None or len(content) == 0:
+        return []
+    if len(content) > MAX_BYTES:
+        return []
 
     content_type = resp.raw_response.headers.get("Content-Type", "").lower()
     if "html" not in content_type:
-        return []
+        head = content[:256].lstrip().lower()
+        if not (head.startswith(b"<!doctype") and b"html" in head) and not head.startswith(b"<html"):
+            return []
 
     try:
         soup = BeautifulSoup(resp.raw_response.content, "lxml")
@@ -68,32 +80,43 @@ def extract_next_links(url, resp):
     text_content = unicodedata.normalize("NFKC", text_content)
 
     page_hash = compute_page_hash(text_content)
+    dup_exact = False
     if page_hash in seen_hashes:
         print(f"Skipping exact duplicate: {url}")
-        return []
-    seen_hashes.add(page_hash)
+        dup_exact = True
+    else:
+        seen_hashes.add(page_hash)
 
     words = _extract_words(soup)
     simhash = compute_simhash(words)
+    dup_near = False
     for old_hash in seen_simhashes:
         if hamming_distance(simhash, old_hash) < 5:
             print(f"Skipping near-duplicate: {url}")
-            return []
-    seen_simhashes.add(simhash)
+            dup_near = True
+            break
+    if not dup_near:
+        seen_simhashes.add(simhash)
 
     canonical = normalize_url(resp.url or url)
+    report_urls.add(report_key(resp.url or url))
     first_time = canonical not in seen_urls
     seen_urls.add(canonical)
 
-    word_counter.update(w for w in words if w not in STOPWORDS)
     count = len(words)
-    if count > longest_page[1]:
-        longest_page = (canonical, count)
+    
+    if not dup_exact and not dup_near and count >= LOW_INFO_MIN:
+        # your original line, unchanged, just indented into the guard
+        word_counter.update(w for w in words if w not in STOPWORDS)
+        if count > longest_page[1]:
+            longest_page = (canonical, count)
 
     if first_time:
         host = urlparse(canonical).netloc.lower()
         if host.endswith(".uci.edu"):
             subdomain_counts[host] += 1
+    else:
+        host = urlparse(canonical).netloc.lower()
 
     raw_links = []
     for link in soup.find_all("a", href=True):
@@ -172,8 +195,18 @@ def normalize_url(url: str):
     if hostname.startswith("www."):
         hostname = hostname[4:]
     netloc = hostname
+
+    #keep non-default ports, drop only default ports
+    port = parsed.port
+    if port and port not in (80, 443):
+        netloc = f"{hostname}:{port}"
+
     # Ensure that all URLs are delimited by a singular '/' so the same site is only visited once
     path = parsed.path.replace("//", "/")
+
+    #normalize trailing slash (so /foo and /foo/ are treated the same)
+    if path != "/" and path.endswith("/"):
+        path = path.rstrip("/")
 
     # Sort in alphabetical order by key, use value as a tiebreaker for sorting
     order_query = sorted(parse_qsl(parsed.query, keep_blank_values=True))
@@ -269,12 +302,15 @@ def is_valid(url):
             return False
         if FILETYPE_PATTERN.search(path.lower()):
             return False
-        if len(query) > 1000 or path.count("/") > 15:
+        if len(query) > 120 or path.count("/") > 15:
             return False
         if re.search(r"/\d{4}/\d{2}/\d{2}", path):
             return False
         if re.search(r"(page|p)=\d{3,}", query):
             return False
+        if query:
+            if query.count("&") + 1 > 8:
+                return False
         segments = [seg for seg in path.strip("/").split("/") if seg]
         if len(segments) > 3 and len(set(segments)) < len(segments) / 2:
             return False
@@ -282,12 +318,52 @@ def is_valid(url):
             return False
         if re.search(r"(session|login|logout)[=/]?", path, re.IGNORECASE):
             return False
-        if len(netloc.split(".")) > 4:
+        if len(netloc.split(".")) > 6:
             return False
         if any(len(seg) > 100 for seg in segments):
             return False
+        
+        path_lower = path.lower()
+        query_lower = query.lower()
+
+        #isg.ics calendar trap
+        if netloc == "isg.ics.uci.edu" and (path_lower.startswith("/events/") or path_lower.startswith("/event/")):
+            return False
+
+        #WICS / NGS calendar pages only (keep rest of the site)
+        if netloc in {"wics.ics.uci.edu", "ngs.ics.uci.edu"} and path_lower.startswith("/events/"):
+            return False
+
+        #doku.php wiki trees
+        if "doku.php" in path_lower:
+            return False
+
+        #gitlab commit/page explosion
+        if netloc == "gitlab.ics.uci.edu":
+            return False
+
+        #large image galleries with very low text value
+        if "/~eppstein/pix" in path_lower:
+            return False
+
+        #grape reported as an infinite trap
+        if netloc == "grape.ics.uci.edu":
+            return False
+
+        #fano rules tree
+        if netloc == "fano.ics.uci.edu" and path_lower.startswith("/ca/rules/"):
+            return False
+
+        #generic calendar engines mentioned (ical / tribe / wp-json)
+        if "ical" in path_lower or "ical" in query_lower:
+            return False
+        if "tribe_event" in query_lower or "/tribe/" in path_lower:
+            return False
+        if "wp-json" in path_lower:
+            return False
+        
         return True
-    except Exception:
+    except (TypeError, ValueError):
         return False
     
 
@@ -299,7 +375,7 @@ def write_metrics():
     with open("metrics.txt", "w", encoding="utf-8") as f:
         try:
             f.write("=== 1) Unique Pages ===\n")
-            f.write(f"Total unique pages: {len(seen_urls)}\n\n")
+            f.write(f"Total unique pages: {len(report_urls)}\n\n")
             f.write("=== 2) Longest Page ===\n")
             f.write(f"Longest page in terms of words: {longest_page[0]}, {longest_page[1]} words\n\n")
             f.write("=== 3) 50 Most Common Words ===\n")
@@ -323,3 +399,8 @@ def write_subdomain_counts():
             print(f"Error occurred with retrieving subdomain metrics - {e}")
     except Exception as e:
             print(f"Exception occurred: {e}")
+
+def report_key(u: str) -> str:
+    p = urlparse(u)
+    # Same URL, fragment removed only
+    return urlunparse((p.scheme, p.netloc, p.path, p.params, p.query, ""))
