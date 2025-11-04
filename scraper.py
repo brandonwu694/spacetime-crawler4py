@@ -45,8 +45,6 @@ STOPWORDS = frozenset({
     "weren't", 'won', "won't", 'wouldn', "wouldn't"
 })
 
-seen_hashes = set()
-
 
 def scraper(url, resp):
     links = extract_next_links(url, resp)
