@@ -6,6 +6,7 @@ from bs4.element import Comment
 import hashlib
 import unicodedata
 
+
 seen_hashes = set()  # For exact duplicate detection
 seen_simhashes = set()  # For near-duplicate detection
 
@@ -45,6 +46,7 @@ STOPWORDS = frozenset({
 })
 
 seen_hashes = set()
+
 
 def scraper(url, resp):
     links = extract_next_links(url, resp)
@@ -100,13 +102,12 @@ def extract_next_links(url, resp):
 
     canonical = normalize_url(resp.url or url)
     report_urls.add(report_key(resp.url or url))
-    first_time = canonical not in seen_urls
-    seen_urls.add(canonical)
+    first_time = canonical not in report_urls
+    report_urls.add(canonical)
 
     count = len(words)
     
     if not dup_exact and not dup_near and count >= LOW_INFO_MIN:
-        # your original line, unchanged, just indented into the guard
         word_counter.update(w for w in words if w not in STOPWORDS)
         if count > longest_page[1]:
             longest_page = (canonical, count)
@@ -171,7 +172,6 @@ def extract_next_links(url, resp):
     write_metrics()
     write_subdomain_counts()
     return list(extracted_links)
-
 
 
 # Key values in query that are not relevant to the content of a web page
@@ -242,6 +242,7 @@ def _tag_visible(el, _disallowed=DISALLOWED_TAGS):
 # Regex patterm that matches sequences of one or more alphabetic character(s), ensuring there is a word boundary
 _word_re = re.compile(r"\b[a-zA-Z0-9]+\b")
 
+
 def _extract_words(soup):
     """Extract words visible words to user on given URL page"""
     texts = soup.find_all(string=True)
@@ -259,6 +260,7 @@ FILETYPE_PATTERN = re.compile(
 )
 
 VALID_SCHEMES = frozenset({"https", "http"})
+
 
 def compute_page_hash(content):
     """Compute a SHA256 hash of the page text for exact duplicate detection."""
@@ -338,23 +340,23 @@ def is_valid(url):
         if "doku.php" in path_lower:
             return False
 
-        #gitlab commit/page explosion
+        # gitlab commit/page explosion
         if netloc == "gitlab.ics.uci.edu":
             return False
 
-        #large image galleries with very low text value
+        # large image galleries with very low text value
         if "/~eppstein/pix" in path_lower:
             return False
 
-        #grape reported as an infinite trap
+        # grape reported as an infinite trap
         if netloc == "grape.ics.uci.edu":
             return False
 
-        #fano rules tree
+        # fano rules tree
         if netloc == "fano.ics.uci.edu" and path_lower.startswith("/ca/rules/"):
             return False
 
-        #generic calendar engines mentioned (ical / tribe / wp-json)
+        # generic calendar engines mentioned (ical / tribe / wp-json)
         if "ical" in path_lower or "ical" in query_lower:
             return False
         if "tribe_event" in query_lower or "/tribe/" in path_lower:
@@ -399,6 +401,7 @@ def write_subdomain_counts():
             print(f"Error occurred with retrieving subdomain metrics - {e}")
     except Exception as e:
             print(f"Exception occurred: {e}")
+
 
 def report_key(u: str) -> str:
     p = urlparse(u)
