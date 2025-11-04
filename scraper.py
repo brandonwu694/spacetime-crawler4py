@@ -16,6 +16,8 @@ longest_page = ("", 0)
 word_counter = Counter()
 subdomain_counts = defaultdict(int)
 report_urls = set()
+seen_urls = set()
+page_counter = 0
 
 LOW_INFO_MIN = 30
 MAX_BYTES = 5_000_000
@@ -53,6 +55,7 @@ def scraper(url, resp):
 
 def extract_next_links(url, resp):
     global longest_page
+    global page_counter
 
     if resp.status != 200 or resp.raw_response is None or resp.raw_response.content is None:
         return []
@@ -99,9 +102,11 @@ def extract_next_links(url, resp):
         seen_simhashes.add(simhash)
 
     canonical = normalize_url(resp.url or url)
+    if canonical is None:
+        return []
     report_urls.add(report_key(resp.url or url))
-    first_time = canonical not in report_urls
-    report_urls.add(canonical)
+    first_time = canonical not in seen_urls
+    seen_urls.add(canonical)
 
     count = len(words)
 
@@ -128,13 +133,13 @@ def extract_next_links(url, resp):
 
     # --- Adaptive Trap Detection Logic ---
     pages_seen = subdomain_counts.get(host, 0)
-    link_limit = 400 + pages_seen * 10          # increase limit gradually
-    same_host_limit = 250 + pages_seen * 5      # increase host-link limit gradually
+    link_limit = 600 + pages_seen * 15          # increase limit gradually
+    same_host_limit = 400 + pages_seen * 8      # increase host-link limit gradually
 
-    # 1. Too many outlinks, likely a trap
+    # 1. Too many outlinks, likely a trap, trimming instead of skipping
     if len(raw_links) > link_limit:
-        print(f"[Trap] {canonical} has {len(raw_links)} outlinks (limit {link_limit}) — skipping.")
-        return []
+        print(f"[Trap] {canonical} has {len(raw_links)} outlinks (limit {link_limit}) — trimming.")
+        raw_links = raw_links[:link_limit]
 
     # 2. Repetitive pattern trap (calendar, numeric loops)
     def pattern_for(u):
@@ -153,7 +158,7 @@ def extract_next_links(url, resp):
             print(f"[Trap] {canonical} repeating pattern {most_common} — limiting.")
             raw_links = list({u for u in raw_links if pattern_for(u) != most_common})[:50]
 
-    # 3. Overly concentrated in one host → self-loop or redirect trap
+    # 3. Overly concentrated in one host, self-loop or redirect trap
     host_counts = Counter(urlparse(u).netloc.lower() for u in raw_links)
     if host_counts and host_counts.most_common(1)[0][1] > same_host_limit:
         print(f"[Trap] {canonical} has >{same_host_limit} links to same host — trimming.")
@@ -167,8 +172,10 @@ def extract_next_links(url, resp):
         if is_valid(normalized):
             extracted_links.add(normalized)
 
-    write_metrics()
-    write_subdomain_counts()
+    page_counter += 1
+    if page_counter % 200 == 0:
+        write_metrics()
+        write_subdomain_counts()
     return list(extracted_links)
 
 
@@ -214,7 +221,11 @@ def normalize_url(url: str) -> str | None:
             return None
 
         # Port: keep non-default ports
-        port = parsed.port
+        try:
+            port = parsed.port
+        except ValueError:
+            port = None
+
         netloc = hostname
         if port and port not in (80, 443):
             netloc = f"{hostname}:{port}"
