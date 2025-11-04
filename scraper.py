@@ -5,13 +5,12 @@ from collections import Counter, defaultdict
 from bs4.element import Comment
 import hashlib
 import unicodedata
+import posixpath
 
 
 seen_hashes = set()  # For exact duplicate detection
 seen_simhashes = set()  # For near-duplicate detection
 
-page_hashes = set()
-page_shingles = []
 longest_page = ("", 0)
 word_counter = Counter()
 subdomain_counts = defaultdict(int)
@@ -44,8 +43,6 @@ STOPWORDS = frozenset({
     'shan', "shan't", 'shouldn', "shouldn't", 'wasn', "wasn't", 'weren',
     "weren't", 'won', "won't", 'wouldn', "wouldn't"
 })
-
-seen_hashes = set()
 
 
 def scraper(url, resp):
@@ -196,17 +193,22 @@ def normalize_url(url: str):
         hostname = hostname[4:]
     netloc = hostname
 
-    #keep non-default ports, drop only default ports
+    # Keep non-default ports, drop only default ports
     port = parsed.port
     if port and port not in (80, 443):
         netloc = f"{hostname}:{port}"
 
     # Ensure that all URLs are delimited by a singular '/' so the same site is only visited once
-    path = parsed.path.replace("//", "/")
+    path = parsed.path or "/"
+    path = path.replace("//", "/")
+    path = posixpath.normpath(path)
+    if not path.startswith("/"):
+        path = "/" + path
+    if path == "/.":
+        path = "/"
 
-    #normalize trailing slash (so /foo and /foo/ are treated the same)
-    if path != "/" and path.endswith("/"):
-        path = path.rstrip("/")
+    if parsed.path.endswith("/") and not path.endswith("/"):
+        path += "/"
 
     # Sort in alphabetical order by key, use value as a tiebreaker for sorting
     order_query = sorted(parse_qsl(parsed.query, keep_blank_values=True))
