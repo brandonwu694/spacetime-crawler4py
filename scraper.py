@@ -247,7 +247,7 @@ def _tag_visible(el, _disallowed=DISALLOWED_TAGS):
 
 
 # Regex patterm that matches sequences of one or more alphabetic character(s), ensuring there is a word boundary
-_word_re = re.compile(r"\b[a-zA-Z0-9]+\b")
+_word_re = re.compile(r"\b[a-zA-Z]+\b")
 
 
 def _extract_words(soup):
