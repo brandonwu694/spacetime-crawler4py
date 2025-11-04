@@ -186,39 +186,46 @@ TRACKING_PARAMS = frozenset({
 
 
 def normalize_url(url: str):
-    """"Remove fragment and port number from URL"""
+    """Normalize URLs by removing fragments, standardizing hostname, handling ports, and cleaning query parameters."""
+
+    # Add scheme if missing
+    if not re.match(r"^https?://", url):
+        url = "https://" + url
+
     parsed = urlparse(url)
+
+    # Scheme
     scheme = parsed.scheme.lower()
-    # Take the parsed hostname if it is exists and remove any trailing dots
-    # 'or ""' is simply a defensive check in the rare case that a URL does not contain a hostname
+
+    # Hostname: lowercase, remove trailing dots, remove www.
     hostname = (parsed.hostname or "").rstrip(".").lower()
     if hostname.startswith("www."):
         hostname = hostname[4:]
-    netloc = hostname
 
-    #keep non-default ports, drop only default ports
+    # Port: keep non-default ports
     port = parsed.port
+    netloc = hostname
     if port and port not in (80, 443):
         netloc = f"{hostname}:{port}"
 
-    # Ensure that all URLs are delimited by a singular '/' so the same site is only visited once
+    # Path normalization
     path = parsed.path.replace("//", "/")
-
-    #normalize trailing slash (so /foo and /foo/ are treated the same)
     if path != "/" and path.endswith("/"):
         path = path.rstrip("/")
 
-    # Sort in alphabetical order by key, use value as a tiebreaker for sorting
+    # Query normalization: remove tracking params and sort
     order_query = sorted(parse_qsl(parsed.query, keep_blank_values=True))
-    params = []
-    for key, value in order_query:
-        if key.lower() not in TRACKING_PARAMS:
-            params.append((key, value))
-
-    # Key-value pairs in the query should now be sorted
+    params = [(k, v) for k, v in order_query if k.lower() not in TRACKING_PARAMS]
     clean_query = urlencode(params, doseq=True)
 
-    new_parsed = parsed._replace(scheme=scheme, netloc=netloc, path=path, query=clean_query, fragment="")
+    # Rebuild URL
+    new_parsed = parsed._replace(
+        scheme=scheme,
+        netloc=netloc,
+        path=path,
+        query=clean_query,
+        fragment=""  # Remove fragment
+    )
     return urlunparse(new_parsed)
 
 
