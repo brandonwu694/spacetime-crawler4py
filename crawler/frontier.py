@@ -57,9 +57,12 @@ class Frontier(object):
         url = normalize(url)
         urlhash = get_urlhash(url)
         if urlhash not in self.save:
-            self.save[urlhash] = (url, False)
-            self.save.sync()
-            self.to_be_downloaded.append(url)
+            try:
+                self.save[urlhash] = (url, False)
+                self.save.sync()
+                self.to_be_downloaded.append(url)
+            except Exception as e:
+                self.logger.error(f"Failed to save URL {url}: {e}")
     
     def mark_url_complete(self, url):
         urlhash = get_urlhash(url)
