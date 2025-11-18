@@ -1,0 +1,57 @@
+=== 1) Unique Pages ===
+Total unique pages: 15600
+
+=== 2) Longest Page ===
+Longest page in terms of words: http://ics.uci.edu/~cs224, 78184 words
+
+=== 3) 50 Most Common Words ===
+research, 23224
+student, 13165
+computer, 12978
+uci, 12425
+information, 11355
+students, 11197
+ics, 11021
+e, 10880
+software, 10800
+graduate, 10375
+events, 10351
+data, 10333
+n, 10133
+undergraduate, 9688
+physics, 9058
+science, 8997
+news, 8996
+us, 8646
+courses, 8414
+ramesh, 8358
+may, 8204
+p, 8161
+b, 8085
+department, 8063
+search, 7922
+engineering, 7749
+computing, 7729
+learning, 7717
+university, 7641
+informatics, 7558
+people, 7367
+l, 6921
+irvine, 6889
+one, 6878
+new, 6784
+faculty, 6701
+systems, 6669
+projects, 6631
+time, 6589
+contact, 6527
+home, 6427
+current, 6415
+past, 6282
+community, 6223
+c, 6030
+design, 5949
+r, 5847
+read, 5781
+books, 5633
+june, 5467
